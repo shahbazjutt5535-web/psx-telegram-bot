@@ -17,9 +17,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# -------------------------
-# Environment
-# -------------------------
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 if not BOT_TOKEN:
@@ -70,9 +67,6 @@ def calculate_obv(df):
             obv.append(obv[-1])
     return pd.Series(obv, index=df.index)
 
-# -------------------------
-# Interval Map
-# -------------------------
 interval_map = {
     "15m": Interval.in_15_minute,
     "30m": Interval.in_30_minute,
@@ -84,25 +78,17 @@ interval_map = {
 
 stocks = ["FFC", "OGDC", "HUBCO", "ENGRO"]
 
-# -------------------------
-# Telegram App
-# -------------------------
 telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 def create_psx_command(symbol, interval_key):
 
     async def command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
         try:
-            # 🔥 TvDatafeed yahan move kiya gaya hai (startup crash fix)
             tv = TvDatafeed(username=None, password=None)
 
-            df = tv.get_hist(
-                symbol,
-                "PSX",
-                interval=interval_map[interval_key],
-                n_bars=150
-            )
+            df = tv.get_hist(symbol, "PSX",
+                             interval=interval_map[interval_key],
+                             n_bars=150)
 
             if df is None or df.empty:
                 await update.message.reply_text("No data found.")
@@ -113,22 +99,15 @@ def create_psx_command(symbol, interval_key):
             df['STOCH_RSI'] = calculate_stoch_rsi(df)
             df['ATR'] = calculate_atr(df)
             df['OBV'] = calculate_obv(df)
-            df['SMA20'] = df['close'].rolling(20).mean()
-            df['EMA20'] = df['close'].ewm(span=20, adjust=False).mean()
 
             last = df.iloc[-1]
 
             message = (
                 f"📊 {symbol} ({interval_key})\n\n"
                 f"Close: {round(last['close'],2)}\n"
-                f"Volume: {round(last['volume'],2)}\n\n"
                 f"RSI: {round(last['RSI'],2)}\n"
                 f"MACD: {round(last['MACD'],2)}\n"
-                f"MACD Signal: {round(last['MACD_SIGNAL'],2)}\n"
-                f"Stoch RSI: {round(last['STOCH_RSI'],2)}\n"
                 f"ATR: {round(last['ATR'],2)}\n"
-                f"SMA20: {round(last['SMA20'],2)}\n"
-                f"EMA20: {round(last['EMA20'],2)}\n"
                 f"OBV: {round(last['OBV'],2)}"
             )
 
@@ -142,44 +121,38 @@ def create_psx_command(symbol, interval_key):
 
 for stock in stocks:
     for interval_key in interval_map.keys():
-        cmd = f"{stock.lower()}_{interval_key}"
         telegram_app.add_handler(
-            CommandHandler(cmd, create_psx_command(stock, interval_key))
+            CommandHandler(f"{stock.lower()}_{interval_key}",
+                           create_psx_command(stock, interval_key))
         )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔥 PSX Indicator Bot Active\n\n"
-        "Example:\n"
-        "/ffc_15m\n"
-        "/ogdc_1h\n"
-        "/hubco_4h\n"
-        "/engro_12h"
-    )
+    await update.message.reply_text("🔥 PSX Indicator Bot Active")
 
 telegram_app.add_handler(CommandHandler("start", start))
 
 # -------------------------
-# Flask App (Render Web Service)
+# Flask
 # -------------------------
+
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "PSX Indicator Bot Running 🚀"
+    return "Bot Running 🚀"
 
 # -------------------------
-# Run Telegram in Background
+# Run Telegram Properly (v20 way)
 # -------------------------
+
 def run_telegram():
-    asyncio.run(telegram_app.initialize())
-    asyncio.run(telegram_app.start())
-    asyncio.run(telegram_app.updater.start_polling())
+    asyncio.run(telegram_app.run_polling())
 
 # -------------------------
 # Main
 # -------------------------
+
 if __name__ == "__main__":
-    threading.Thread(target=run_telegram).start()
+    threading.Thread(target=run_telegram, daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     flask_app.run(host="0.0.0.0", port=port)
