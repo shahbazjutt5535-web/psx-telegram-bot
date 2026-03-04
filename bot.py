@@ -1,72 +1,72 @@
 import os
 from flask import Flask
-from tvDatafeed import TvDatafeed
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler
+from tvDatafeed import TvDatafeed, Interval
+import pandas as pd
 import logging
 
-# ----------------------------
+# ------------------------------
 # Logging
-# ----------------------------
+# ------------------------------
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# ----------------------------
-# Environment Variables
-# ----------------------------
-TV_USERNAME = os.getenv("TV_USERNAME")
-TV_PASSWORD = os.getenv("TV_PASSWORD")
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-PORT = int(os.getenv("PORT", 5000))  # default 5000 if not set
-
-if not TV_USERNAME or not TV_PASSWORD or not BOT_TOKEN:
-    logging.error("Environment variables TV_USERNAME, TV_PASSWORD, BOT_TOKEN must be set")
-    exit(1)
-
-# ----------------------------
-# TradingView login (non-interactive)
-# ----------------------------
-try:
-    tv = TvDatafeed(username=TV_USERNAME, password=TV_PASSWORD, chromedriver_path=None)
-    logging.info("TradingView login successful")
-except Exception as e:
-    logging.error(f"TradingView login failed: {e}")
-    exit(1)
-
-# ----------------------------
-# Flask app for Render
-# ----------------------------
+# ------------------------------
+# Flask Web Service (Render Port)
+# ------------------------------
 app = Flask(__name__)
 
-@app.route("/")
+@app.route('/')
 def home():
     return "Bot is running!"
 
-# ----------------------------
-# Telegram Bot
-# ----------------------------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ------------------------------
+# Telegram Bot Setup (v20+)
+# ------------------------------
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    logging.error("BOT_TOKEN env variable not set")
+    exit(1)
+
+async def start(update, context):
     await update.message.reply_text("Bot is running!")
 
-# Initialize bot
-application = ApplicationBuilder().token(BOT_TOKEN).build()
-application.add_handler(CommandHandler("start", start))
+telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
+telegram_app.add_handler(CommandHandler("start", start))
 
-# ----------------------------
-# Run both Flask and Telegram
-# ----------------------------
+# ------------------------------
+# TradingView Datafeed Setup
+# ------------------------------
+TV_USERNAME = os.environ.get("TV_USERNAME")
+TV_PASSWORD = os.environ.get("TV_PASSWORD")
+
+if TV_USERNAME and TV_PASSWORD:
+    try:
+        tv = TvDatafeed(TV_USERNAME, TV_PASSWORD)
+        # Example: Get last 5 daily bars for AAPL
+        data: pd.DataFrame = tv.get_hist("AAPL", "NASDAQ", interval=Interval.in_daily, n_bars=5)
+        logging.info(f"TradingView data:\n{data}")
+    except Exception as e:
+        logging.error(f"TradingView login/data fetch failed: {e}")
+else:
+    logging.warning("TV_USERNAME or TV_PASSWORD not set. Skipping TradingView login.")
+
+# ------------------------------
+# Run Both Flask and Telegram
+# ------------------------------
+def run_flask():
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
 if __name__ == "__main__":
     import threading
 
-    # Run Flask in a separate thread
-    def run_flask():
-        app.run(host="0.0.0.0", port=PORT)
-
+    # Run Flask in a thread
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
-    # Run Telegram bot
-    logging.info("Starting Telegram bot...")
-    application.run_polling()
+    # Run Telegram bot (polling)
+    telegram_app.run_polling()
