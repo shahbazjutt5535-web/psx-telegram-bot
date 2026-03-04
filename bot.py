@@ -17,19 +17,17 @@ logging.basicConfig(
 )
 
 # -------------------------
-# ENV
+# Environment
 # -------------------------
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-TV_USERNAME = os.environ.get("TV_USERNAME")
-TV_PASSWORD = os.environ.get("TV_PASSWORD")
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN not set")
 
 # -------------------------
-# TradingView
+# TradingView (PUBLIC MODE)
 # -------------------------
-tv = TvDatafeed(TV_USERNAME, TV_PASSWORD)
+tv = TvDatafeed()   # ← No username/password (Render safe)
 
 # -------------------------
 # Indicator Functions
@@ -68,10 +66,10 @@ def calculate_atr(df, period=14):
 def calculate_obv(df):
     obv = [0]
     for i in range(1, len(df)):
-        if df['close'][i] > df['close'][i-1]:
-            obv.append(obv[-1] + df['volume'][i])
-        elif df['close'][i] < df['close'][i-1]:
-            obv.append(obv[-1] - df['volume'][i])
+        if df['close'].iloc[i] > df['close'].iloc[i-1]:
+            obv.append(obv[-1] + df['volume'].iloc[i])
+        elif df['close'].iloc[i] < df['close'].iloc[i-1]:
+            obv.append(obv[-1] - df['volume'].iloc[i])
         else:
             obv.append(obv[-1])
     return pd.Series(obv, index=df.index)
@@ -97,37 +95,42 @@ def create_psx_command(symbol, interval_key):
 
     async def command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-        df = tv.get_hist(symbol, "PSX", interval=interval_map[interval_key], n_bars=150)
+        try:
+            df = tv.get_hist(symbol, "PSX", interval=interval_map[interval_key], n_bars=150)
 
-        if df is None or df.empty:
-            await update.message.reply_text("No data found.")
-            return
+            if df is None or df.empty:
+                await update.message.reply_text("No data found.")
+                return
 
-        df['RSI'] = calculate_rsi(df)
-        df['MACD'], df['MACD_SIGNAL'] = calculate_macd(df)
-        df['STOCH_RSI'] = calculate_stoch_rsi(df)
-        df['ATR'] = calculate_atr(df)
-        df['OBV'] = calculate_obv(df)
-        df['SMA20'] = df['close'].rolling(20).mean()
-        df['EMA20'] = df['close'].ewm(span=20, adjust=False).mean()
+            df['RSI'] = calculate_rsi(df)
+            df['MACD'], df['MACD_SIGNAL'] = calculate_macd(df)
+            df['STOCH_RSI'] = calculate_stoch_rsi(df)
+            df['ATR'] = calculate_atr(df)
+            df['OBV'] = calculate_obv(df)
+            df['SMA20'] = df['close'].rolling(20).mean()
+            df['EMA20'] = df['close'].ewm(span=20, adjust=False).mean()
 
-        last = df.iloc[-1]
+            last = df.iloc[-1]
 
-        message = (
-            f"📊 {symbol} ({interval_key})\n\n"
-            f"Close: {last['close']}\n"
-            f"Volume: {last['volume']}\n\n"
-            f"RSI: {round(last['RSI'],2)}\n"
-            f"MACD: {round(last['MACD'],2)}\n"
-            f"MACD Signal: {round(last['MACD_SIGNAL'],2)}\n"
-            f"Stoch RSI: {round(last['STOCH_RSI'],2)}\n"
-            f"ATR: {round(last['ATR'],2)}\n"
-            f"SMA20: {round(last['SMA20'],2)}\n"
-            f"EMA20: {round(last['EMA20'],2)}\n"
-            f"OBV: {round(last['OBV'],2)}"
-        )
+            message = (
+                f"📊 {symbol} ({interval_key})\n\n"
+                f"Close: {round(last['close'],2)}\n"
+                f"Volume: {round(last['volume'],2)}\n\n"
+                f"RSI: {round(last['RSI'],2)}\n"
+                f"MACD: {round(last['MACD'],2)}\n"
+                f"MACD Signal: {round(last['MACD_SIGNAL'],2)}\n"
+                f"Stoch RSI: {round(last['STOCH_RSI'],2)}\n"
+                f"ATR: {round(last['ATR'],2)}\n"
+                f"SMA20: {round(last['SMA20'],2)}\n"
+                f"EMA20: {round(last['EMA20'],2)}\n"
+                f"OBV: {round(last['OBV'],2)}"
+            )
 
-        await update.message.reply_text(message)
+            await update.message.reply_text(message)
+
+        except Exception as e:
+            logging.error(e)
+            await update.message.reply_text("Error fetching data.")
 
     return command
 
@@ -156,7 +159,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 telegram_app.add_handler(CommandHandler("start", start))
 
 # -------------------------
-# Flask (Render)
+# Flask (Render Required)
 # -------------------------
 flask_app = Flask(__name__)
 
