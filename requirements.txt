@@ -1,7 +1,7 @@
 python-telegram-bot==20.3
-tvdatafeed
 pandas==2.1.4
 numpy==1.24.4
 httpx~=0.24.0
 websocket-client
 Flask>=2.3.0
+git+https://github.com/baselsm/tvdatafeed.git
