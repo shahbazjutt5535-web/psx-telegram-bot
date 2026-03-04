@@ -1,84 +1,74 @@
 import os
 import logging
-from telegram import Update, Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from tvDatafeed import TvDatafeed, Interval
-from indicators import calculate_all  # make sure indicators.py has this function
+from indicators import calculate_all  # your indicators module
+from telegram import Bot, Update
+from telegram.ext import Updater, CommandHandler, CallbackContext
+from flask import Flask
 
-# ---------------------------
-# Logging setup
-# ---------------------------
+# ----------------------------
+# Logging
+# ----------------------------
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# ---------------------------
+# ----------------------------
 # Environment variables
-# ---------------------------
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+# ----------------------------
 TV_USERNAME = os.environ.get("TV_USERNAME")
 TV_PASSWORD = os.environ.get("TV_PASSWORD")
-PORT = int(os.environ.get("PORT", 5000))  # Default to 5000 if not set
+BOT_TOKEN   = os.environ.get("BOT_TOKEN")
+PORT        = int(os.environ.get("PORT", 5000))
 
-if not BOT_TOKEN:
-    logger.error("BOT_TOKEN is not set. Exiting.")
-    exit(1)
+if not TV_USERNAME or not TV_PASSWORD or not BOT_TOKEN:
+    logger.error("TV_USERNAME, TV_PASSWORD, or BOT_TOKEN not set in env variables.")
+    raise SystemExit("Missing credentials")
 
-# ---------------------------
-# Initialize TradingView connection
-# ---------------------------
+# ----------------------------
+# TradingView login (non-interactive)
+# ----------------------------
 try:
-    tv = TvDatafeed(username=TV_USERNAME, password=TV_PASSWORD)
-    logger.info("Connected to TradingView successfully.")
-except EOFError:
-    logger.error("Cannot do interactive login. Make sure TV_USERNAME and TV_PASSWORD are set as env variables.")
-    exit(1)
+    tv = TvDatafeed(username=TV_USERNAME, password=TV_PASSWORD, chromedriver_path=None)
 except Exception as e:
-    logger.error(f"TradingView connection failed: {e}")
-    exit(1)
+    logger.error(f"TradingView login failed: {e}")
+    raise SystemExit("Cannot login to TradingView non-interactively.")
 
-# ---------------------------
-# Telegram bot command handlers
-# ---------------------------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Welcome to PSX Trading Bot! Send /signal to get latest signals.")
+# ----------------------------
+# Telegram Bot setup
+# ----------------------------
+bot = Bot(token=BOT_TOKEN)
+updater = Updater(token=BOT_TOKEN, use_context=True)
+dispatcher = updater.dispatcher
 
-async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Bot is running ✅")
+
+def indicators_command(update: Update, context: CallbackContext):
     try:
-        # Calculate all indicators from indicators.py
-        signals = calculate_all(tv)
-        await update.message.reply_text(signals)
+        results = calculate_all(tv)  # your indicator calculations
+        update.message.reply_text(str(results))
     except Exception as e:
-        logger.error(f"Error generating signals: {e}")
-        await update.message.reply_text("Failed to fetch signals. Try again later.")
+        logger.error(f"Error in indicator calculation: {e}")
+        update.message.reply_text("Error calculating indicators")
 
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"You said: {update.message.text}")
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(CommandHandler("indicators", indicators_command))
 
-# ---------------------------
-# Run bot
-# ---------------------------
-async def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+# Start polling in background
+updater.start_polling()
 
-    # Command handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("signal", signal))
+# ----------------------------
+# Flask server for Render
+# ----------------------------
+app = Flask(__name__)
 
-    # Echo handler for testing
-    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), echo))
-
-    # Start bot with webhook for Render
-    webhook_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/"  # optional
-    logger.info(f"Starting bot on port {PORT}...")
-    await app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=webhook_url if webhook_url else None
-    )
+@app.route("/")
+def home():
+    return "Bot is running ✅"
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    # Keep Flask running so Render doesn't kill the service
+    app.run(host="0.0.0.0", port=PORT)
