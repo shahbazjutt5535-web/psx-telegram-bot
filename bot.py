@@ -1,6 +1,7 @@
 import os
 import logging
 import threading
+import asyncio
 import pandas as pd
 import numpy as np
 from flask import Flask
@@ -27,7 +28,7 @@ if not BOT_TOKEN:
 # -------------------------
 # TradingView (PUBLIC MODE)
 # -------------------------
-tv = TvDatafeed()   # ← No username/password (Render safe)
+tv = TvDatafeed()
 
 # -------------------------
 # Indicator Functions
@@ -89,12 +90,13 @@ interval_map = {
 stocks = ["FFC", "OGDC", "HUBCO", "ENGRO"]
 
 # -------------------------
-# Command Generator
+# Telegram App
 # -------------------------
+telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
+
 def create_psx_command(symbol, interval_key):
 
     async def command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
         try:
             df = tv.get_hist(symbol, "PSX", interval=interval_map[interval_key], n_bars=150)
 
@@ -134,11 +136,6 @@ def create_psx_command(symbol, interval_key):
 
     return command
 
-# -------------------------
-# Telegram App
-# -------------------------
-telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
-
 for stock in stocks:
     for interval_key in interval_map.keys():
         cmd = f"{stock.lower()}_{interval_key}"
@@ -159,21 +156,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 telegram_app.add_handler(CommandHandler("start", start))
 
 # -------------------------
-# Flask (Render Required)
+# Flask App (Render Web Service)
 # -------------------------
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "PSX Indicator Bot Running"
+    return "PSX Indicator Bot Running 🚀"
 
-def run_flask():
-    port = int(os.environ.get("PORT", 5000))
-    flask_app.run(host="0.0.0.0", port=port)
+# -------------------------
+# Run Telegram in Background
+# -------------------------
+def run_telegram():
+    asyncio.run(telegram_app.initialize())
+    asyncio.run(telegram_app.start())
+    asyncio.run(telegram_app.updater.start_polling())
 
 # -------------------------
 # Main
 # -------------------------
 if __name__ == "__main__":
-    threading.Thread(target=run_flask).start()
-    telegram_app.run_polling()
+    threading.Thread(target=run_telegram).start()
+    port = int(os.environ.get("PORT", 10000))
+    flask_app.run(host="0.0.0.0", port=port)
