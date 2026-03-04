@@ -31,7 +31,7 @@ if not BOT_TOKEN:
 # -------------------------
 # TradingView (PUBLIC MODE)
 # -------------------------
-# Use public mode, no username/password (avoids Render EOFError)
+# Use public mode, no username/password
 try:
     tv = TvDatafeed(username=None, password=None)
     logging.info("TvDatafeed initialized successfully")
@@ -59,8 +59,7 @@ def calculate_macd(df):
     ema26 = df['close'].ewm(span=26, adjust=False).mean()
     macd = ema12 - ema26
     signal = macd.ewm(span=9, adjust=False).mean()
-    histogram = macd - signal
-    return macd, signal, histogram
+    return macd, signal
 
 def calculate_stoch_rsi(df, period=14):
     """Calculate Stochastic RSI"""
@@ -93,7 +92,7 @@ def calculate_obv(df):
     return pd.Series(obv, index=df.index)
 
 # -------------------------
-# Interval Map (TvDatafeed 1.2.1)
+# Interval Map (TvDatafeed)
 # -------------------------
 interval_map = {
     "15m": Interval.in_15_minute,
@@ -118,15 +117,20 @@ def create_psx_command(symbol, interval_key):
             
             # Fetch data with error handling
             try:
-                df = tv.get_hist(symbol=symbol, exchange="PSX", 
-                                interval=interval_map[interval_key], n_bars=150)
+                # Using the correct parameters for the forked tvdatafeed
+                df = tv.get_hist(
+                    symbol=symbol, 
+                    exchange="PSX", 
+                    interval=interval_map[interval_key], 
+                    n_bars=150
+                )
             except Exception as e:
                 logging.error(f"Error fetching data from TvDatafeed: {e}")
                 await update.message.reply_text(f"Failed to fetch data for {symbol}. Please try again later.")
                 return
             
             if df is None or df.empty:
-                await update.message.reply_text(f"No data found for {symbol}.")
+                await update.message.reply_text(f"No data found for {symbol} on PSX exchange.")
                 return
 
             # Ensure we have enough data for calculations
@@ -136,7 +140,7 @@ def create_psx_command(symbol, interval_key):
 
             # Calculate indicators
             df['RSI'] = calculate_rsi(df)
-            df['MACD'], df['MACD_SIGNAL'], df['MACD_HIST'] = calculate_macd(df)
+            df['MACD'], df['MACD_SIGNAL'] = calculate_macd(df)
             df['STOCH_RSI'] = calculate_stoch_rsi(df)
             df['ATR'] = calculate_atr(df)
             df['OBV'] = calculate_obv(df)
@@ -190,21 +194,23 @@ for stock in stocks:
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    commands = []
-    for stock in stocks:
-        for interval in interval_map.keys():
-            commands.append(f"/{stock.lower()}_{interval}")
+    # Create a list of example commands
+    example_commands = [
+        "/ffc_15m - FFC 15-minute",
+        "/ogdc_1h - OGDC 1-hour", 
+        "/hubco_4h - HUBCO 4-hour",
+        "/engro_12h - ENGRO 12-hour"
+    ]
     
-    commands_text = "\n".join(commands[:6]) + "\n..."  # Show first 6 as example
+    commands_text = "\n".join(example_commands)
     
     await update.message.reply_text(
         "🔥 *PSX Indicator Bot Active*\n\n"
-        "Available commands:\n"
-        f"`{commands_text}`\n\n"
-        "*Example:*\n"
-        "/ffc_15m - FFC 15-minute analysis\n"
-        "/ogdc_1h - OGDC 1-hour analysis\n"
-        "/hubco_4h - HUBCO 4-hour analysis",
+        "*Available intervals:* 15m, 30m, 1h, 2h, 4h, 12h\n"
+        "*Stocks:* FFC, OGDC, HUBCO, ENGRO\n\n"
+        "*Example commands:*\n"
+        f"{commands_text}\n\n"
+        "Just type /stock_interval (e.g., /ffc_15m)",
         parse_mode='Markdown'
     )
 
@@ -227,7 +233,7 @@ def home():
 
 @flask_app.route("/health")
 def health():
-    return {"status": "healthy"}, 200
+    return {"status": "healthy", "bot": "running"}, 200
 
 def run_flask():
     """Run Flask app in a separate thread"""
@@ -242,7 +248,7 @@ if __name__ == "__main__":
         # Start Flask in a separate thread
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
-        logging.info("Flask server started on port {}".format(os.environ.get("PORT", 5000)))
+        logging.info(f"Flask server started on port {os.environ.get('PORT', 5000)}")
         
         # Run Telegram bot in polling mode
         logging.info("Starting Telegram bot...")
