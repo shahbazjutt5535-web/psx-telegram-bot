@@ -1,5 +1,5 @@
 python-telegram-bot==20.3
-tvdatafeed
+git+https://github.com/baselsm/tvdatafeed.git
 pandas
 pandas-ta
 numpy
