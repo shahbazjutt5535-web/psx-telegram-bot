@@ -1,47 +1,44 @@
-import pandas_ta as ta
+import pandas as pd
+import numpy as np
 
-def calculate_all(data):
+def calculate_indicators(df):
+    """
+    Input: df with 'close' column
+    Output: df with SMA, EMA, RSI, MACD, Bollinger Bands
+    """
+    # Simple Moving Averages
+    for period in [5, 13, 21, 50, 100, 200]:
+        df[f"SMA{period}"] = df["close"].rolling(window=period).mean()
 
-    # Moving Averages
-    data["SMA5"] = ta.sma(data["close"], 5)
-    data["SMA13"] = ta.sma(data["close"], 13)
-    data["SMA21"] = ta.sma(data["close"], 21)
-    data["SMA50"] = ta.sma(data["close"], 50)
-    data["SMA100"] = ta.sma(data["close"], 100)
-    data["SMA200"] = ta.sma(data["close"], 200)
+    # Exponential Moving Averages
+    for period in [5, 13, 21, 50, 100, 200]:
+        df[f"EMA{period}"] = df["close"].ewm(span=period, adjust=False).mean()
 
-    data["EMA5"] = ta.ema(data["close"], 5)
-    data["EMA13"] = ta.ema(data["close"], 13)
-    data["EMA21"] = ta.ema(data["close"], 21)
-    data["EMA50"] = ta.ema(data["close"], 50)
-    data["EMA100"] = ta.ema(data["close"], 100)
-    data["EMA200"] = ta.ema(data["close"], 200)
-
-    # MACD
-    macd = ta.macd(data["close"], fast=3, slow=10, signal=16)
-    data = data.join(macd)
+    # Weighted Moving Averages
+    for period in [5, 13, 21, 50, 100]:
+        weights = np.arange(1, period + 1)
+        df[f"WMA{period}"] = df["close"].rolling(period).apply(lambda prices: np.dot(prices, weights)/weights.sum(), raw=True)
 
     # RSI
-    data["RSI5"] = ta.rsi(data["close"], 5)
-    data["RSI14"] = ta.rsi(data["close"], 14)
+    delta = df["close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(14).mean()
+    avg_loss = loss.rolling(14).mean()
+    rs = avg_gain / avg_loss
+    df["RSI14"] = 100 - (100 / (1 + rs))
 
-    # ATR
-    data["ATR14"] = ta.atr(data["high"], data["low"], data["close"], 14)
+    # MACD
+    ema12 = df["close"].ewm(span=12, adjust=False).mean()
+    ema26 = df["close"].ewm(span=26, adjust=False).mean()
+    df["MACD"] = ema12 - ema26
+    df["MACD_SIGNAL"] = df["MACD"].ewm(span=9, adjust=False).mean()
+    df["MACD_HIST"] = df["MACD"] - df["MACD_SIGNAL"]
 
-    # ADX
-    adx = ta.adx(data["high"], data["low"], data["close"], 14)
-    data = data.join(adx)
+    # Bollinger Bands
+    df["BB_MIDDLE"] = df["close"].rolling(20).mean()
+    df["BB_STD"] = df["close"].rolling(20).std()
+    df["BB_UPPER"] = df["BB_MIDDLE"] + 2 * df["BB_STD"]
+    df["BB_LOWER"] = df["BB_MIDDLE"] - 2 * df["BB_STD"]
 
-    # Bollinger
-    bb = ta.bbands(data["close"], 20)
-    data = data.join(bb)
-
-    # Supertrend
-    st = ta.supertrend(data["high"], data["low"], data["close"], 10, 3)
-    data = data.join(st)
-
-    # Donchian
-    dc = ta.donchian(data["high"], data["low"], 20)
-    data = data.join(dc)
-
-    return data
+    return df
