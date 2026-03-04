@@ -30,10 +30,10 @@ stocks = ["FFC", "OGDC", "HUBCO", "ENGRO"]
 interval_map = {
     "15m": Interval.in_15_minute,
     "30m": Interval.in_30_minute,
-    "1h": Interval.in_hour,
-    "2h": Interval.in_2_hour,
-    "4h": Interval.in_4_hour,
-    "12h": Interval.in_12_hour,
+    "1h": Interval.in_1_hour,
+    "2h": Interval.in_2_hours,
+    "4h": Interval.in_4_hours,
+    "12h": Interval.in_12_hours,
 }
 
 # -------------------------
