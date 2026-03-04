@@ -20,14 +20,21 @@ logging.basicConfig(
 # Environment
 # -------------------------
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not set")
+    raise ValueError("BOT_TOKEN environment variable not set!")
 
 # -------------------------
-# TradingView (PUBLIC MODE)
+# PSX Stocks and Intervals
 # -------------------------
-tv = TvDatafeed(username=None, password=None)  # Public mode, avoids input()
+stocks = ["FFC", "OGDC", "HUBCO", "ENGRO"]
+interval_map = {
+    "15m": Interval.in_15_minute,
+    "30m": Interval.in_30_minute,
+    "1h": Interval.in_hour,
+    "2h": Interval.in_2_hour,
+    "4h": Interval.in_4_hour,
+    "12h": Interval.in_12_hour,
+}
 
 # -------------------------
 # Indicator Functions
@@ -74,28 +81,22 @@ def calculate_obv(df):
     return pd.Series(obv, index=df.index)
 
 # -------------------------
-# Interval Map
+# Fetch TradingView Data (Public Mode)
 # -------------------------
-interval_map = {
-    "15m": Interval.in_15_minute,
-    "30m": Interval.in_30_minute,
-    "1h": Interval.in_hour,
-    "2h": Interval.in_2_hour,
-    "4h": Interval.in_4_hour,
-    "12h": Interval.in_12_hour,
-}
-
-stocks = ["FFC", "OGDC", "HUBCO", "ENGRO"]
+def get_tv_data(symbol, interval, n_bars=150):
+    tv = TvDatafeed(username="", password="")  # public, non-interactive
+    df = tv.get_hist(symbol, "PSX", interval=interval, n_bars=n_bars)
+    return df
 
 # -------------------------
-# Command Generator
+# Create Command Handlers
 # -------------------------
 def create_psx_command(symbol, interval_key):
     async def command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
-            df = tv.get_hist(symbol, "PSX", interval=interval_map[interval_key], n_bars=150)
+            df = get_tv_data(symbol, interval_map[interval_key], n_bars=150)
             if df is None or df.empty:
-                await update.message.reply_text("No data found.")
+                await update.message.reply_text("❌ No data found.")
                 return
 
             df['RSI'] = calculate_rsi(df)
@@ -107,7 +108,6 @@ def create_psx_command(symbol, interval_key):
             df['EMA20'] = df['close'].ewm(span=20, adjust=False).mean()
 
             last = df.iloc[-1]
-
             message = (
                 f"📊 {symbol} ({interval_key})\n\n"
                 f"Close: {round(last['close'],2)}\n"
@@ -121,20 +121,18 @@ def create_psx_command(symbol, interval_key):
                 f"EMA20: {round(last['EMA20'],2)}\n"
                 f"OBV: {round(last['OBV'],2)}"
             )
-
             await update.message.reply_text(message)
-
         except Exception as e:
             logging.error(e)
-            await update.message.reply_text("Error fetching data.")
-
+            await update.message.reply_text("❌ Error fetching data.")
     return command
 
 # -------------------------
-# Telegram App
+# Telegram Bot
 # -------------------------
 telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+# Add PSX command handlers
 for stock in stocks:
     for interval_key in interval_map.keys():
         cmd = f"{stock.lower()}_{interval_key}"
@@ -142,6 +140,7 @@ for stock in stocks:
             CommandHandler(cmd, create_psx_command(stock, interval_key))
         )
 
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🔥 PSX Indicator Bot Active\n\n"
@@ -151,17 +150,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/hubco_4h\n"
         "/engro_12h"
     )
-
 telegram_app.add_handler(CommandHandler("start", start))
 
 # -------------------------
-# Flask (Render Free Web Service)
+# Flask App for Web Service
 # -------------------------
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "PSX Indicator Bot is Running ✅"
+    return "✅ PSX Indicator Bot Running!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
@@ -171,7 +169,7 @@ def run_flask():
 # Main
 # -------------------------
 if __name__ == "__main__":
-    # Run Flask in a separate thread for Render web service
+    # Run Flask in background
     threading.Thread(target=run_flask).start()
-    # Run Telegram bot polling in foreground
+    # Run Telegram polling
     telegram_app.run_polling()
