@@ -10,45 +10,89 @@ import nest_asyncio
 import asyncio
 import time
 import sys
+import builtins
 
 # Apply nest_asyncio
 nest_asyncio.apply()
 
 # -------------------------
-# EXTREME MONKEY PATCH: Completely replace the input function at the module level
+# RADICAL FIX: Directly patch the tvDatafeed module before import
 # -------------------------
-import builtins
-# Save original
-original_input = builtins.input
-# Create a function that auto-responds 'y' to any prompt
-def auto_confirm_input(prompt=''):
-    print(f"Auto-confirming prompt: {prompt}")
-    return 'y'
-# Replace input globally BEFORE any other imports
-builtins.input = auto_confirm_input
-
-# Also patch the specific module that will be imported
+import importlib.util
 import sys
-class MockInputModule:
-    def input(self, prompt=''):
-        return 'y'
 
-# Now import tvDatafeed after input is patched
+# First, let's completely disable input() globally
+original_input = builtins.input
+builtins.input = lambda prompt='': 'y'
+
+# Now, let's forcefully patch the specific method in the library
 try:
+    # Import the module
+    from tvDatafeed import main as tvdatafeed_main
+    
+    # Directly replace the __assert_dir method that contains the input() call
+    def patched_assert_dir(self):
+        """Patched version that doesn't ask for input"""
+        import os
+        import stat
+        from pathlib import Path
+        
+        # Skip the input prompt entirely
+        print("Auto-installing chromedriver...")
+        
+        home = str(Path.home())
+        driver_dir = os.path.join(home, '.wdm', 'drivers', 'chromedriver')
+        if not os.path.exists(driver_dir):
+            os.makedirs(driver_dir, exist_ok=True)
+        
+        self.driver_dir = driver_dir
+        
+    # Apply the patch
+    tvdatafeed_main.TvDatafeed._TvDatafeed__assert_dir = patched_assert_dir
+    
+    # Also patch the __init__ to avoid any other prompts
+    original_init = tvdatafeed_main.TvDatafeed.__init__
+    
+    def patched_init(self, username=None, password=None, auto_login=None):
+        """Patched init that skips prompts"""
+        self.username = username
+        self.password = password
+        self.auto_login = auto_login if auto_login is not None else (username is not None)
+        
+        # Skip the assert_dir call that causes problems
+        import os
+        import stat
+        from pathlib import Path
+        
+        home = str(Path.home())
+        driver_dir = os.path.join(home, '.wdm', 'drivers', 'chromedriver')
+        os.makedirs(driver_dir, exist_ok=True)
+        self.driver_dir = driver_dir
+        
+        self.ws = None
+        self.session = None
+        self.token = None
+        self.user_profile = None
+        
+    tvdatafeed_main.TvDatafeed.__init__ = patched_init
+    
+    # Now import the class
     from tvDatafeed import TvDatafeed, Interval
-    print("Successfully imported tvDatafeed with patched input")
+    print("Successfully patched tvDatafeed!")
+    
 except Exception as e:
-    print(f"Import error: {e}")
-    raise
+    print(f"Patching failed: {e}")
+    # Fallback to normal import
+    from tvDatafeed import TvDatafeed, Interval
 
-# Restore original input (optional)
+# Restore original input
 builtins.input = original_input
 
 # -------------------------
 # Logging
 # -------------------------
 logging.basicConfig(
-    format="%(asdate)s - %(levelname)s - %(message)s",
+    format="%(asctime)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
@@ -60,27 +104,34 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable not set")
 
 # -------------------------
-# TradingView Initialization with multiple fallbacks
+# TradingView Initialization
 # -------------------------
-tv = None
-init_methods = [
-    ("no params", lambda: TvDatafeed()),
-    ("None credentials", lambda: TvDatafeed(username=None, password=None)),
-    ("auto_login=False", lambda: TvDatafeed(auto_login=False)),
-]
-
-for method_name, init_func in init_methods:
-    try:
-        print(f"Trying initialization with {method_name}...")
-        tv = init_func()
-        print(f"Success with {method_name}")
-        break
-    except Exception as e:
-        print(f"Failed with {method_name}: {e}")
-        continue
-
-if tv is None:
-    raise RuntimeError("All TvDatafeed initialization methods failed")
+try:
+    # Try different initialization methods
+    tv = None
+    
+    methods = [
+        lambda: TvDatafeed(),
+        lambda: TvDatafeed(username=None, password=None),
+        lambda: TvDatafeed(auto_login=False),
+    ]
+    
+    for i, method in enumerate(methods):
+        try:
+            print(f"Trying method {i+1}...")
+            tv = method()
+            print(f"Method {i+1} succeeded!")
+            break
+        except Exception as e:
+            print(f"Method {i+1} failed: {e}")
+            continue
+    
+    if tv is None:
+        raise Exception("All initialization methods failed")
+        
+except Exception as e:
+    logging.error(f"TvDatafeed initialization failed: {e}")
+    raise
 
 # -------------------------
 # Interval Map
@@ -223,6 +274,7 @@ for stock in stocks:
     for interval_key in interval_map.keys():
         cmd_name = f"{stock.lower()}_{interval_key}"
         telegram_app.add_handler(CommandHandler(cmd_name, create_psx_command(stock, interval_key)))
+        logging.info(f"Added command: /{cmd_name}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -230,7 +282,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Commands:\n"
         "`/ffc_15m` - FFC 15m\n"
         "`/ogdc_1h` - OGDC 1h\n"
-        "`/hubco_4h` - HUBCO 4h",
+        "`/hubco_4h` - HUBCO 4h\n"
+        "`/engro_12h` - ENGRO 12h",
         parse_mode='Markdown'
     )
 
