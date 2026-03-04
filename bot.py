@@ -6,11 +6,24 @@ import numpy as np
 from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from tvDatafeed import TvDatafeed, Interval
 import nest_asyncio
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
+
+# -------------------------
+# MONKEY PATCH: Replace input() to bypass interactive prompt in tvDatafeed
+# -------------------------
+import builtins
+original_input = builtins.input
+# Replace input with a function that automatically returns 'y' for any prompt
+builtins.input = lambda prompt='': 'y'
+
+# Now import tvDatafeed after patching input
+from tvDatafeed import TvDatafeed, Interval
+
+# Restore original input function (optional, but good practice)
+builtins.input = original_input
 
 # -------------------------
 # Logging
@@ -30,22 +43,22 @@ if not BOT_TOKEN:
 # -------------------------
 # TradingView (PUBLIC MODE - FIXED FOR RENDER)
 # -------------------------
-# Use public mode with auto_login=False to prevent interactive prompts
+# Initialize TvDatafeed after input is patched
 try:
-    # Initialize without any parameters - this uses no-login mode
-    # The library version from baselsm might handle this differently
+    # Try initialization without parameters first (no-login mode)
     tv = TvDatafeed()
     logging.info("TvDatafeed initialized successfully in no-login mode")
 except Exception as e:
     logging.error(f"First init attempt failed: {e}")
     try:
-        # Alternative initialization with explicit None values
+        # Alternative with None credentials
         tv = TvDatafeed(username=None, password=None)
         logging.info("TvDatafeed initialized with None credentials")
     except Exception as e2:
         logging.error(f"Second init attempt failed: {e2}")
-        # Last resort - try with auto_login=False if the fork supports it
+        # Last resort
         try:
+            # Some forks support auto_login=False
             tv = TvDatafeed(auto_login=False)
             logging.info("TvDatafeed initialized with auto_login=False")
         except Exception as e3:
@@ -130,7 +143,6 @@ def create_psx_command(symbol, interval_key):
             
             # Fetch data with error handling
             try:
-                # Using the correct parameters for the forked tvdatafeed
                 df = tv.get_hist(
                     symbol=symbol, 
                     exchange="PSX", 
@@ -207,7 +219,6 @@ for stock in stocks:
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Create a list of example commands
     example_commands = [
         "/ffc_15m - FFC 15-minute",
         "/ogdc_1h - OGDC 1-hour", 
