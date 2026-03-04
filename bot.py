@@ -9,26 +9,46 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import nest_asyncio
 import asyncio
 import time
+import sys
 
-# Apply nest_asyncio to allow nested event loops
+# Apply nest_asyncio
 nest_asyncio.apply()
 
 # -------------------------
-# MONKEY PATCH: Replace input() to bypass interactive prompt in tvDatafeed
+# EXTREME MONKEY PATCH: Completely replace the input function at the module level
 # -------------------------
 import builtins
+# Save original
 original_input = builtins.input
-builtins.input = lambda prompt='': 'y'
+# Create a function that auto-responds 'y' to any prompt
+def auto_confirm_input(prompt=''):
+    print(f"Auto-confirming prompt: {prompt}")
+    return 'y'
+# Replace input globally BEFORE any other imports
+builtins.input = auto_confirm_input
 
-from tvDatafeed import TvDatafeed, Interval
+# Also patch the specific module that will be imported
+import sys
+class MockInputModule:
+    def input(self, prompt=''):
+        return 'y'
 
+# Now import tvDatafeed after input is patched
+try:
+    from tvDatafeed import TvDatafeed, Interval
+    print("Successfully imported tvDatafeed with patched input")
+except Exception as e:
+    print(f"Import error: {e}")
+    raise
+
+# Restore original input (optional)
 builtins.input = original_input
 
 # -------------------------
 # Logging
 # -------------------------
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s",
+    format="%(asdate)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
@@ -40,14 +60,27 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable not set")
 
 # -------------------------
-# TradingView Initialization
+# TradingView Initialization with multiple fallbacks
 # -------------------------
-try:
-    tv = TvDatafeed()
-    logging.info("TvDatafeed initialized successfully in no-login mode")
-except Exception as e:
-    logging.error(f"TvDatafeed initialization failed: {e}")
-    raise
+tv = None
+init_methods = [
+    ("no params", lambda: TvDatafeed()),
+    ("None credentials", lambda: TvDatafeed(username=None, password=None)),
+    ("auto_login=False", lambda: TvDatafeed(auto_login=False)),
+]
+
+for method_name, init_func in init_methods:
+    try:
+        print(f"Trying initialization with {method_name}...")
+        tv = init_func()
+        print(f"Success with {method_name}")
+        break
+    except Exception as e:
+        print(f"Failed with {method_name}: {e}")
+        continue
+
+if tv is None:
+    raise RuntimeError("All TvDatafeed initialization methods failed")
 
 # -------------------------
 # Interval Map
@@ -111,39 +144,33 @@ def calculate_obv(df):
     return pd.Series(obv, index=df.index)
 
 # -------------------------
-# Telegram Command Generator - FIXED VERSION
+# Telegram Command Generator
 # -------------------------
 def create_psx_command(symbol, interval_key):
     async def command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Send immediate acknowledgment
-        await update.message.reply_text(f"⏳ Fetching data for {symbol} ({interval_key})...")
+        await update.message.reply_text(f"⏳ Fetching {symbol} ({interval_key}) data...")
         
         try:
-            # Run data fetching in a thread pool to avoid blocking
+            # Run data fetching in thread pool
             loop = asyncio.get_event_loop()
             
-            # Fetch data with timeout
-            try:
-                df = await loop.run_in_executor(
-                    None, 
-                    lambda: tv.get_hist(
-                        symbol=symbol, 
-                        exchange="PSX", 
-                        interval=interval_map[interval_key], 
-                        n_bars=150
-                    )
+            df = await loop.run_in_executor(
+                None, 
+                lambda: tv.get_hist(
+                    symbol=symbol, 
+                    exchange="PSX", 
+                    interval=interval_map[interval_key], 
+                    n_bars=150
                 )
-            except Exception as e:
-                logging.error(f"Error fetching data from TvDatafeed: {e}")
-                await update.message.reply_text(f"❌ Failed to fetch data for {symbol}. TradingView may be limiting access.")
-                return
+            )
             
             if df is None or df.empty:
-                await update.message.reply_text(f"❌ No data found for {symbol} on PSX exchange. The symbol might be incorrect or delisted.")
+                await update.message.reply_text(f"❌ No data for {symbol}")
                 return
 
             if len(df) < 30:
-                await update.message.reply_text(f"⚠️ Insufficient data for {symbol}. Need at least 30 bars.")
+                await update.message.reply_text(f"⚠️ Insufficient data for {symbol}")
                 return
 
             # Calculate indicators
@@ -157,39 +184,31 @@ def create_psx_command(symbol, interval_key):
 
             last = df.iloc[-1]
             
-            if pd.isna(last['RSI']) or pd.isna(last['MACD']):
-                await update.message.reply_text("⚠️ Insufficient data for indicator calculations.")
-                return
-
-            # Format message
             message = (
                 f"📊 *{symbol} ({interval_key})*\n\n"
-                f"💰 *Price Data*\n"
-                f"Close: `{last['close']:.2f}`\n"
-                f"Volume: `{last['volume']:,.0f}`\n\n"
-                f"📈 *Indicators*\n"
-                f"RSI: `{last['RSI']:.2f}`\n"
-                f"MACD: `{last['MACD']:.2f}`\n"
-                f"MACD Signal: `{last['MACD_SIGNAL']:.2f}`\n"
-                f"Stoch RSI: `{last['STOCH_RSI']:.2f}`\n"
-                f"ATR: `{last['ATR']:.2f}`\n"
-                f"SMA20: `{last['SMA20']:.2f}`\n"
-                f"EMA20: `{last['EMA20']:.2f}`\n"
-                f"OBV: `{last['OBV']:,.0f}`"
+                f"💰 Close: `{last['close']:.2f}`\n"
+                f"📊 Volume: `{last['volume']:,.0f}`\n\n"
+                f"📈 RSI: `{last['RSI']:.2f}`\n"
+                f"📈 MACD: `{last['MACD']:.2f}`\n"
+                f"📈 Signal: `{last['MACD_SIGNAL']:.2f}`\n"
+                f"📈 Stoch RSI: `{last['STOCH_RSI']:.2f}`\n"
+                f"📈 ATR: `{last['ATR']:.2f}`\n"
+                f"📈 SMA20: `{last['SMA20']:.2f}`\n"
+                f"📈 EMA20: `{last['EMA20']:.2f}`\n"
+                f"📈 OBV: `{last['OBV']:,.0f}`"
             )
 
             await update.message.reply_text(message, parse_mode='Markdown')
 
         except Exception as e:
-            logging.error(f"Error processing {symbol} {interval_key}: {e}", exc_info=True)
-            await update.message.reply_text(f"❌ Error fetching data for {symbol}. Please try again later.")
+            logging.error(f"Error: {e}", exc_info=True)
+            await update.message.reply_text(f"❌ Error fetching {symbol}")
 
     return command
 
 # -------------------------
-# Telegram Bot App - FIXED INITIALIZATION
+# Telegram Bot App
 # -------------------------
-# Build application with custom settings
 telegram_app = ApplicationBuilder()\
     .token(BOT_TOKEN)\
     .concurrent_updates(True)\
@@ -199,51 +218,41 @@ telegram_app = ApplicationBuilder()\
     .write_timeout(30)\
     .build()
 
-# Add stock commands
+# Add commands
 for stock in stocks:
     for interval_key in interval_map.keys():
         cmd_name = f"{stock.lower()}_{interval_key}"
         telegram_app.add_handler(CommandHandler(cmd_name, create_psx_command(stock, interval_key)))
-        logging.info(f"Added command: /{cmd_name}")
 
-# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    commands_text = "\n".join([f"/{stock.lower()}_{interval}" for stock in stocks[:1] for interval in ["15m", "1h", "4h"]])
-    
     await update.message.reply_text(
-        "🔥 *PSX Indicator Bot Active*\n\n"
-        "*Available intervals:* 15m, 30m, 1h, 2h, 4h, 12h\n"
-        "*Stocks:* FFC, OGDC, HUBCO, ENGRO\n\n"
-        "*Example commands:*\n"
-        f"`/ffc_15m` - FFC 15-minute\n"
-        f"`/ogdc_1h` - OGDC 1-hour\n"
-        f"`/hubco_4h` - HUBCO 4-hour\n\n"
-        "⏳ *Note:* First request may take 10-15 seconds",
+        "🔥 *PSX Bot Active*\n\n"
+        "Commands:\n"
+        "`/ffc_15m` - FFC 15m\n"
+        "`/ogdc_1h` - OGDC 1h\n"
+        "`/hubco_4h` - HUBCO 4h",
         parse_mode='Markdown'
     )
 
 telegram_app.add_handler(CommandHandler("start", start))
 
-# Add error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logging.error(f"Update {update} caused error {context.error}")
-    if update and update.message:
-        await update.message.reply_text("⚠️ An error occurred. Please try again.")
+    logging.error(f"Error: {context.error}")
 
 telegram_app.add_error_handler(error_handler)
 
 # -------------------------
-# Flask App for Render
+# Flask App
 # -------------------------
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def home():
-    return "✅ PSX Indicator Bot is Running!"
+    return "✅ PSX Bot Running!"
 
 @flask_app.route("/health")
 def health():
-    return {"status": "healthy", "bot": "running"}, 200
+    return {"status": "healthy"}, 200
 
 def run_flask():
     port = int(os.environ.get("PORT", 5000))
@@ -257,17 +266,12 @@ if __name__ == "__main__":
         # Start Flask
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
-        logging.info(f"Flask server started on port {os.environ.get('PORT', 5000)}")
-        
-        # Small delay to ensure Flask starts
         time.sleep(2)
         
-        # Run Telegram bot
-        logging.info("Starting Telegram bot...")
+        # Start bot
+        logging.info("Starting bot...")
         telegram_app.run_polling(drop_pending_updates=True)
         
-    except KeyboardInterrupt:
-        logging.info("Bot stopped by user")
     except Exception as e:
-        logging.error(f"Fatal error: {e}", exc_info=True)
+        logging.error(f"Fatal: {e}", exc_info=True)
         raise
