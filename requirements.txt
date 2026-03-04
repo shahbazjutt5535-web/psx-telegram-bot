@@ -5,3 +5,4 @@ httpx~=0.24.0
 websocket-client
 Flask>=2.3.0
 git+https://github.com/baselsm/tvdatafeed.git
+nest_asyncio==1.6.0
