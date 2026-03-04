@@ -1,77 +1,72 @@
 import os
 from flask import Flask
-from tvDatafeed import TvDatafeed, Interval
-from indicators import *  # your indicators.py file
-from telegram import Bot
-from telegram.ext import Updater, CommandHandler
+from tvDatafeed import TvDatafeed
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import logging
 
-# ------------------- SETTINGS -------------------
-
-# TradingView credentials from environment variables
-TV_USERNAME = os.environ.get("TV_USERNAME", "shahbazjutt553")
-TV_PASSWORD = os.environ.get("TV_PASSWORD", "shahbazjutt535@")
-
-# Telegram Bot API
-BOT_TOKEN = os.environ.get("BOT_API", "8493857966:AAFEnjd_wWh7xi7VdCYdPvDAM5I-8Zr-l-M")
-
-# Port detection for Render
-PORT = int(os.environ.get("PORT", 5000))
-
-# ------------------- LOGGING -------------------
+# ----------------------------
+# Logging
+# ----------------------------
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-logger = logging.getLogger(__name__)
 
-# ------------------- TRADINGVIEW SETUP -------------------
-# Use non-interactive login
+# ----------------------------
+# Environment Variables
+# ----------------------------
+TV_USERNAME = os.getenv("TV_USERNAME")
+TV_PASSWORD = os.getenv("TV_PASSWORD")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PORT = int(os.getenv("PORT", 5000))  # default 5000 if not set
+
+if not TV_USERNAME or not TV_PASSWORD or not BOT_TOKEN:
+    logging.error("Environment variables TV_USERNAME, TV_PASSWORD, BOT_TOKEN must be set")
+    exit(1)
+
+# ----------------------------
+# TradingView login (non-interactive)
+# ----------------------------
 try:
-    tv = TvDatafeed(username=TV_USERNAME, password=TV_PASSWORD)
+    tv = TvDatafeed(username=TV_USERNAME, password=TV_PASSWORD, chromedriver_path=None)
+    logging.info("TradingView login successful")
 except Exception as e:
-    logger.error("TradingView login failed: %s", e)
-    tv = None
+    logging.error(f"TradingView login failed: {e}")
+    exit(1)
 
-# ------------------- TELEGRAM BOT SETUP -------------------
-bot = Bot(token=BOT_TOKEN)
-updater = Updater(token=BOT_TOKEN, use_context=True)
-dispatcher = updater.dispatcher
-
-def start(update, context):
-    update.message.reply_text("Hello! Bot is running on Render 🚀")
-
-start_handler = CommandHandler('start', start)
-dispatcher.add_handler(start_handler)
-
-# ------------------- FLASK APP (for open port) -------------------
+# ----------------------------
+# Flask app for Render
+# ----------------------------
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot is running on Render ✅"
+    return "Bot is running!"
 
-# ------------------- BACKGROUND JOBS / SIGNALS -------------------
-# Example function using indicators
-def check_signals():
-    if tv:
-        # Replace with your logic
-        data = tv.get_hist(symbol='AAPL', exchange='NASDAQ', interval=Interval.in_daily, n_bars=10)
-        logger.info("Fetched AAPL data: %s", data.head())
+# ----------------------------
+# Telegram Bot
+# ----------------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot is running!")
 
-# ------------------- RUN BOT -------------------
+# Initialize bot
+application = ApplicationBuilder().token(BOT_TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+
+# ----------------------------
+# Run both Flask and Telegram
+# ----------------------------
 if __name__ == "__main__":
     import threading
 
-    # Start Telegram bot in a thread
-    bot_thread = threading.Thread(target=updater.start_polling, daemon=True)
-    bot_thread.start()
-    logger.info("Telegram bot started")
+    # Run Flask in a separate thread
+    def run_flask():
+        app.run(host="0.0.0.0", port=PORT)
 
-    # Optional: background indicator check thread
-    bg_thread = threading.Thread(target=check_signals, daemon=True)
-    bg_thread.start()
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
 
-    # Start Flask web server (so Render detects the open port)
-    logger.info("Starting Flask server on port %d", PORT)
-    app.run(host="0.0.0.0", port=PORT)
+    # Run Telegram bot
+    logging.info("Starting Telegram bot...")
+    application.run_polling()
