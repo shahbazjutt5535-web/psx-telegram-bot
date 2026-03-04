@@ -26,11 +26,6 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN not set")
 
 # -------------------------
-# TradingView (PUBLIC MODE)
-# -------------------------
-tv = TvDatafeed()
-
-# -------------------------
 # Indicator Functions
 # -------------------------
 
@@ -97,8 +92,17 @@ telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
 def create_psx_command(symbol, interval_key):
 
     async def command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
         try:
-            df = tv.get_hist(symbol, "PSX", interval=interval_map[interval_key], n_bars=150)
+            # 🔥 TvDatafeed yahan move kiya gaya hai (startup crash fix)
+            tv = TvDatafeed(username=None, password=None)
+
+            df = tv.get_hist(
+                symbol,
+                "PSX",
+                interval=interval_map[interval_key],
+                n_bars=150
+            )
 
             if df is None or df.empty:
                 await update.message.reply_text("No data found.")
