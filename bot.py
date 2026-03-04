@@ -7,6 +7,8 @@ from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import nest_asyncio
+import asyncio
+import time
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -16,13 +18,10 @@ nest_asyncio.apply()
 # -------------------------
 import builtins
 original_input = builtins.input
-# Replace input with a function that automatically returns 'y' for any prompt
 builtins.input = lambda prompt='': 'y'
 
-# Now import tvDatafeed after patching input
 from tvDatafeed import TvDatafeed, Interval
 
-# Restore original input function (optional, but good practice)
 builtins.input = original_input
 
 # -------------------------
@@ -41,35 +40,33 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable not set")
 
 # -------------------------
-# TradingView (PUBLIC MODE - FIXED FOR RENDER)
+# TradingView Initialization
 # -------------------------
-# Initialize TvDatafeed after input is patched
 try:
-    # Try initialization without parameters first (no-login mode)
     tv = TvDatafeed()
     logging.info("TvDatafeed initialized successfully in no-login mode")
 except Exception as e:
-    logging.error(f"First init attempt failed: {e}")
-    try:
-        # Alternative with None credentials
-        tv = TvDatafeed(username=None, password=None)
-        logging.info("TvDatafeed initialized with None credentials")
-    except Exception as e2:
-        logging.error(f"Second init attempt failed: {e2}")
-        # Last resort
-        try:
-            # Some forks support auto_login=False
-            tv = TvDatafeed(auto_login=False)
-            logging.info("TvDatafeed initialized with auto_login=False")
-        except Exception as e3:
-            logging.error(f"All initialization attempts failed: {e3}")
-            raise
+    logging.error(f"TvDatafeed initialization failed: {e}")
+    raise
+
+# -------------------------
+# Interval Map
+# -------------------------
+interval_map = {
+    "15m": Interval.in_15_minute,
+    "30m": Interval.in_30_minute,
+    "1h": Interval.in_1_hour,
+    "2h": Interval.in_2_hour,
+    "4h": Interval.in_4_hour,
+    "12h": Interval.in_12_hour,
+}
+
+stocks = ["FFC", "OGDC", "HUBCO", "ENGRO"]
 
 # -------------------------
 # Indicator Functions
 # -------------------------
 def calculate_rsi(df, period=14):
-    """Calculate RSI indicator"""
     delta = df['close'].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -80,7 +77,6 @@ def calculate_rsi(df, period=14):
     return rsi
 
 def calculate_macd(df):
-    """Calculate MACD indicator"""
     ema12 = df['close'].ewm(span=12, adjust=False).mean()
     ema26 = df['close'].ewm(span=26, adjust=False).mean()
     macd = ema12 - ema26
@@ -88,7 +84,6 @@ def calculate_macd(df):
     return macd, signal
 
 def calculate_stoch_rsi(df, period=14):
-    """Calculate Stochastic RSI"""
     rsi = calculate_rsi(df, period)
     min_rsi = rsi.rolling(window=period, min_periods=period).min()
     max_rsi = rsi.rolling(window=period, min_periods=period).max()
@@ -96,7 +91,6 @@ def calculate_stoch_rsi(df, period=14):
     return stoch_rsi
 
 def calculate_atr(df, period=14):
-    """Calculate Average True Range"""
     high_low = df['high'] - df['low']
     high_close = np.abs(df['high'] - df['close'].shift())
     low_close = np.abs(df['low'] - df['close'].shift())
@@ -106,7 +100,6 @@ def calculate_atr(df, period=14):
     return atr
 
 def calculate_obv(df):
-    """Calculate On-Balance Volume"""
     obv = [0]
     for i in range(1, len(df)):
         if df['close'].iloc[i] > df['close'].iloc[i-1]:
@@ -118,49 +111,39 @@ def calculate_obv(df):
     return pd.Series(obv, index=df.index)
 
 # -------------------------
-# Interval Map (TvDatafeed)
-# -------------------------
-interval_map = {
-    "15m": Interval.in_15_minute,
-    "30m": Interval.in_30_minute,
-    "1h": Interval.in_1_hour,
-    "2h": Interval.in_2_hour,
-    "4h": Interval.in_4_hour,
-    "12h": Interval.in_12_hour,
-}
-
-# List of PSX symbols
-stocks = ["FFC", "OGDC", "HUBCO", "ENGRO"]
-
-# -------------------------
-# Telegram Command Generator
+# Telegram Command Generator - FIXED VERSION
 # -------------------------
 def create_psx_command(symbol, interval_key):
     async def command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Send immediate acknowledgment
+        await update.message.reply_text(f"⏳ Fetching data for {symbol} ({interval_key})...")
+        
         try:
-            # Send typing indicator
-            await update.message.chat.send_action(action="typing")
+            # Run data fetching in a thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
             
-            # Fetch data with error handling
+            # Fetch data with timeout
             try:
-                df = tv.get_hist(
-                    symbol=symbol, 
-                    exchange="PSX", 
-                    interval=interval_map[interval_key], 
-                    n_bars=150
+                df = await loop.run_in_executor(
+                    None, 
+                    lambda: tv.get_hist(
+                        symbol=symbol, 
+                        exchange="PSX", 
+                        interval=interval_map[interval_key], 
+                        n_bars=150
+                    )
                 )
             except Exception as e:
                 logging.error(f"Error fetching data from TvDatafeed: {e}")
-                await update.message.reply_text(f"Failed to fetch data for {symbol}. Please try again later.")
+                await update.message.reply_text(f"❌ Failed to fetch data for {symbol}. TradingView may be limiting access.")
                 return
             
             if df is None or df.empty:
-                await update.message.reply_text(f"No data found for {symbol} on PSX exchange.")
+                await update.message.reply_text(f"❌ No data found for {symbol} on PSX exchange. The symbol might be incorrect or delisted.")
                 return
 
-            # Ensure we have enough data for calculations
             if len(df) < 30:
-                await update.message.reply_text(f"Insufficient data for {symbol}. Need at least 30 bars.")
+                await update.message.reply_text(f"⚠️ Insufficient data for {symbol}. Need at least 30 bars.")
                 return
 
             # Calculate indicators
@@ -174,12 +157,11 @@ def create_psx_command(symbol, interval_key):
 
             last = df.iloc[-1]
             
-            # Check for NaN values
             if pd.isna(last['RSI']) or pd.isna(last['MACD']):
-                await update.message.reply_text("Insufficient data for indicator calculations.")
+                await update.message.reply_text("⚠️ Insufficient data for indicator calculations.")
                 return
 
-            # Format message with proper number formatting
+            # Format message
             message = (
                 f"📊 *{symbol} ({interval_key})*\n\n"
                 f"💰 *Price Data*\n"
@@ -200,15 +182,22 @@ def create_psx_command(symbol, interval_key):
 
         except Exception as e:
             logging.error(f"Error processing {symbol} {interval_key}: {e}", exc_info=True)
-            await update.message.reply_text(f"Error fetching data for {symbol}. Please try again.")
+            await update.message.reply_text(f"❌ Error fetching data for {symbol}. Please try again later.")
 
     return command
 
 # -------------------------
-# Telegram Bot App
+# Telegram Bot App - FIXED INITIALIZATION
 # -------------------------
-# Build application
-telegram_app = ApplicationBuilder().token(BOT_TOKEN).build()
+# Build application with custom settings
+telegram_app = ApplicationBuilder()\
+    .token(BOT_TOKEN)\
+    .concurrent_updates(True)\
+    .pool_timeout(30)\
+    .connect_timeout(30)\
+    .read_timeout(30)\
+    .write_timeout(30)\
+    .build()
 
 # Add stock commands
 for stock in stocks:
@@ -219,22 +208,17 @@ for stock in stocks:
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    example_commands = [
-        "/ffc_15m - FFC 15-minute",
-        "/ogdc_1h - OGDC 1-hour", 
-        "/hubco_4h - HUBCO 4-hour",
-        "/engro_12h - ENGRO 12-hour"
-    ]
-    
-    commands_text = "\n".join(example_commands)
+    commands_text = "\n".join([f"/{stock.lower()}_{interval}" for stock in stocks[:1] for interval in ["15m", "1h", "4h"]])
     
     await update.message.reply_text(
         "🔥 *PSX Indicator Bot Active*\n\n"
         "*Available intervals:* 15m, 30m, 1h, 2h, 4h, 12h\n"
         "*Stocks:* FFC, OGDC, HUBCO, ENGRO\n\n"
         "*Example commands:*\n"
-        f"{commands_text}\n\n"
-        "Just type /stock_interval (e.g., /ffc_15m)",
+        f"`/ffc_15m` - FFC 15-minute\n"
+        f"`/ogdc_1h` - OGDC 1-hour\n"
+        f"`/hubco_4h` - HUBCO 4-hour\n\n"
+        "⏳ *Note:* First request may take 10-15 seconds",
         parse_mode='Markdown'
     )
 
@@ -243,6 +227,8 @@ telegram_app.add_handler(CommandHandler("start", start))
 # Add error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.error(f"Update {update} caused error {context.error}")
+    if update and update.message:
+        await update.message.reply_text("⚠️ An error occurred. Please try again.")
 
 telegram_app.add_error_handler(error_handler)
 
@@ -260,7 +246,6 @@ def health():
     return {"status": "healthy", "bot": "running"}, 200
 
 def run_flask():
-    """Run Flask app in a separate thread"""
     port = int(os.environ.get("PORT", 5000))
     flask_app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
@@ -269,14 +254,17 @@ def run_flask():
 # -------------------------
 if __name__ == "__main__":
     try:
-        # Start Flask in a separate thread
+        # Start Flask
         flask_thread = threading.Thread(target=run_flask, daemon=True)
         flask_thread.start()
         logging.info(f"Flask server started on port {os.environ.get('PORT', 5000)}")
         
-        # Run Telegram bot in polling mode
+        # Small delay to ensure Flask starts
+        time.sleep(2)
+        
+        # Run Telegram bot
         logging.info("Starting Telegram bot...")
-        telegram_app.run_polling()
+        telegram_app.run_polling(drop_pending_updates=True)
         
     except KeyboardInterrupt:
         logging.info("Bot stopped by user")
