@@ -6,3 +6,4 @@ httpx~=0.24.0
 selenium
 chromedriver-autoinstaller
 websocket-client
+Flask==2.3.4
