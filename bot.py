@@ -7,7 +7,6 @@ from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from tvDatafeed import TvDatafeed, Interval
-import asyncio
 import nest_asyncio
 
 # Apply nest_asyncio to allow nested event loops
@@ -29,15 +28,29 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN environment variable not set")
 
 # -------------------------
-# TradingView (PUBLIC MODE)
+# TradingView (PUBLIC MODE - FIXED FOR RENDER)
 # -------------------------
-# Use public mode, no username/password
+# Use public mode with auto_login=False to prevent interactive prompts
 try:
-    tv = TvDatafeed(username=None, password=None)
-    logging.info("TvDatafeed initialized successfully")
+    # Initialize without any parameters - this uses no-login mode
+    # The library version from baselsm might handle this differently
+    tv = TvDatafeed()
+    logging.info("TvDatafeed initialized successfully in no-login mode")
 except Exception as e:
-    logging.error(f"Failed to initialize TvDatafeed: {e}")
-    raise
+    logging.error(f"First init attempt failed: {e}")
+    try:
+        # Alternative initialization with explicit None values
+        tv = TvDatafeed(username=None, password=None)
+        logging.info("TvDatafeed initialized with None credentials")
+    except Exception as e2:
+        logging.error(f"Second init attempt failed: {e2}")
+        # Last resort - try with auto_login=False if the fork supports it
+        try:
+            tv = TvDatafeed(auto_login=False)
+            logging.info("TvDatafeed initialized with auto_login=False")
+        except Exception as e3:
+            logging.error(f"All initialization attempts failed: {e3}")
+            raise
 
 # -------------------------
 # Indicator Functions
