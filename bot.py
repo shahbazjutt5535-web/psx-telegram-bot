@@ -1,74 +1,90 @@
 import os
 import logging
-from tvDatafeed import TvDatafeed, Interval
-from indicators import calculate_all  # your indicators module
-from telegram import Bot, Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from tvDatafeed import TvDatafeed
+import chromedriver_autoinstaller
 from flask import Flask
+from telegram import Update, Bot
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# ----------------------------
+# ------------------------
+# Environment variables
+# ------------------------
+TV_USERNAME = os.getenv("TV_USERNAME")
+TV_PASSWORD = os.getenv("TV_PASSWORD")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PORT = int(os.getenv("PORT", 5000))
+
+# ------------------------
 # Logging
-# ----------------------------
+# ------------------------
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+
 logger = logging.getLogger(__name__)
 
-# ----------------------------
-# Environment variables
-# ----------------------------
-TV_USERNAME = os.environ.get("TV_USERNAME")
-TV_PASSWORD = os.environ.get("TV_PASSWORD")
-BOT_TOKEN   = os.environ.get("BOT_TOKEN")
-PORT        = int(os.environ.get("PORT", 5000))
+# ------------------------
+# Chromedriver auto install
+# ------------------------
+chromedriver_autoinstaller.install()
 
-if not TV_USERNAME or not TV_PASSWORD or not BOT_TOKEN:
-    logger.error("TV_USERNAME, TV_PASSWORD, or BOT_TOKEN not set in env variables.")
-    raise SystemExit("Missing credentials")
-
-# ----------------------------
-# TradingView login (non-interactive)
-# ----------------------------
+# ------------------------
+# Initialize TVDatafeed
+# ------------------------
 try:
-    tv = TvDatafeed(username=TV_USERNAME, password=TV_PASSWORD, chromedriver_path=None)
+    tv = TvDatafeed(username=TV_USERNAME, password=TV_PASSWORD)
+    logger.info("TradingView login successful")
 except Exception as e:
     logger.error(f"TradingView login failed: {e}")
-    raise SystemExit("Cannot login to TradingView non-interactively.")
 
-# ----------------------------
-# Telegram Bot setup
-# ----------------------------
-bot = Bot(token=BOT_TOKEN)
-updater = Updater(token=BOT_TOKEN, use_context=True)
-dispatcher = updater.dispatcher
+# ------------------------
+# Import indicators
+# ------------------------
+from indicators import calculate_all
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Bot is running ✅")
+# ------------------------
+# Telegram Bot Handlers
+# ------------------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Bot is running! Use /signal to get latest indicators.")
 
-def indicators_command(update: Update, context: CallbackContext):
+async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        results = calculate_all(tv)  # your indicator calculations
-        update.message.reply_text(str(results))
+        # Example: fetch calculated indicators
+        result = calculate_all(tv)
+        await update.message.reply_text(f"Latest indicators:\n{result}")
     except Exception as e:
-        logger.error(f"Error in indicator calculation: {e}")
-        update.message.reply_text("Error calculating indicators")
+        await update.message.reply_text(f"Error fetching indicators: {e}")
 
-dispatcher.add_handler(CommandHandler("start", start))
-dispatcher.add_handler(CommandHandler("indicators", indicators_command))
+# ------------------------
+# Start Telegram Bot
+# ------------------------
+application = ApplicationBuilder().token(BOT_TOKEN).build()
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("signal", signal))
 
-# Start polling in background
-updater.start_polling()
-
-# ----------------------------
-# Flask server for Render
-# ----------------------------
+# ------------------------
+# Flask Web Server for Render
+# ------------------------
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Bot is running ✅"
+    return "Bot is running"
 
+# ------------------------
+# Run both Flask and Telegram bot
+# ------------------------
 if __name__ == "__main__":
-    # Keep Flask running so Render doesn't kill the service
+    import threading
+
+    # Run Telegram bot in a thread
+    def run_bot():
+        application.run_polling()
+
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.start()
+
+    # Run Flask server for Render port detection
     app.run(host="0.0.0.0", port=PORT)
