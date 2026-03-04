@@ -1,21 +1,7 @@
-# Telegram
 python-telegram-bot==20.3
-
-# TradingView data
-git+https://github.com/baselsm/tvdatafeed.git
-
-# Data analysis
+tvdatafeed
 pandas==2.1.4
 numpy==1.24.4
-
-# HTTP requests
 httpx~=0.24.0
 websocket-client
-
-# Web server
-Flask>=2.3.0,<3.0
-
-# Optional: for date handling
-python-dateutil>=2.9.0
-pytz>=2026.1
-tzdata>=2025.3
+Flask>=2.3.0
