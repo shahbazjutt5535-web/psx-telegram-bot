@@ -520,7 +520,7 @@ def create_stock_command(symbol, name, tv_symbol, interval_key):
                 f"1️⃣ Market Overview\n"
                 f"💰 Price: {format_value(last['close'])}\n"
                 f"🔓 Open Price: {format_value(last['open'])}\n"
-                f"🔒 LDCP: {format_value(prev['close'])}\n"  
+                f"🔒 Prev Close: {format_value(prev['close'])}\n"  # ← "LDCP" ki jagah "Prev Close"  
                 f"📈 24h High: {format_value(last['high'])}\n"
                 f"📉 24h Low: {format_value(last['low'])}\n"
                 f"🔁 Change: {change_sign} {format_value(change_points)} ({format_value(change_percent)}%)\n"
