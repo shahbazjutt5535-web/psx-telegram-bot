@@ -6,3 +6,7 @@ websocket-client
 Flask>=2.3.0
 git+https://github.com/baselsm/tvdatafeed.git
 nest_asyncio==1.6.0
+selenium==4.21.0
+chromedriver-autoinstaller==0.6.4
+requests==2.31.0
+beautifulsoup4==4.12.3
