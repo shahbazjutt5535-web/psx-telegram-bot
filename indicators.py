@@ -11,22 +11,19 @@ def EMA(data, period=14):
 def SMA(data, period=14):
     return data['close'].rolling(window=period).mean()
 
-def WMA(data, period=14):
-    """Weighted Moving Average"""
-    weights = np.arange(1, period + 1)
-    def wma(window):
-        return np.dot(window, weights) / weights.sum()
-    return data['close'].rolling(window=period).apply(wma, raw=True)
-
 def HMA(data, period=14):
     """Hull Moving Average"""
     half_length = int(period / 2)
     sqrt_length = int(np.sqrt(period))
     
-    wma_half = WMA(data, half_length)
-    wma_full = WMA(data, period)
+    def wma(close, period):
+        weights = np.arange(1, period + 1)
+        return close.rolling(window=period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
+    
+    wma_half = wma(data['close'], half_length)
+    wma_full = wma(data['close'], period)
     raw_hma = 2 * wma_half - wma_full
-    hma = WMA(pd.DataFrame({'close': raw_hma}), sqrt_length)
+    hma = wma(raw_hma, sqrt_length)
     return hma
 
 def RSI(data, period=14):
@@ -74,20 +71,16 @@ def Ichimoku(data, conversion=9, base=26, span=52):
     high = data['high']
     low = data['low']
     
-    # Conversion Line (Tenkan-sen)
     conversion_high = high.rolling(conversion).max()
     conversion_low = low.rolling(conversion).min()
     conversion_line = (conversion_high + conversion_low) / 2
     
-    # Base Line (Kijun-sen)
     base_high = high.rolling(base).max()
     base_low = low.rolling(base).min()
     base_line = (base_high + base_low) / 2
     
-    # Leading Span A (Senkou Span A)
     leading_span_a = ((conversion_line + base_line) / 2).shift(base)
     
-    # Leading Span B (Senkou Span B)
     span_high = high.rolling(span).max()
     span_low = low.rolling(span).min()
     leading_span_b = ((span_high + span_low) / 2).shift(base)
@@ -103,7 +96,7 @@ def SuperTrend(data, period=10, multiplier=3):
     lower_band = hl2 - (multiplier * atr)
     
     supertrend = [0] * len(data)
-    trend = [1] * len(data)  # 1 for uptrend, -1 for downtrend
+    trend = [1] * len(data)
     
     for i in range(1, len(data)):
         if data['close'].iloc[i] > upper_band.iloc[i-1]:
@@ -220,16 +213,6 @@ def VWAP(data):
     vwap = (data['close'] * data['volume']).cumsum() / data['volume'].cumsum()
     return vwap
 
-def KeltnerChannel(data, period=20, atr_period=10, multiplier=2):
-    """Keltner Channel"""
-    ema = EMA(data, period)
-    atr = ATR(data, atr_period)
-    
-    upper = ema + (multiplier * atr)
-    lower = ema - (multiplier * atr)
-    
-    return upper, ema, lower
-
 def HeikinAshi(data):
     """Heikin Ashi candles"""
     ha_data = pd.DataFrame(index=data.index)
@@ -245,24 +228,6 @@ def HeikinAshi(data):
     ha_data['ha_low'] = data[['high', 'low', 'close']].min(axis=1)
     
     return ha_data['ha_close']
-
-def ChoppinessIndex(data, period=14):
-    """Choppiness Index"""
-    tr = ATR(data, 1)  # True Range
-    high_period = data['high'].rolling(period).max()
-    low_period = data['low'].rolling(period).min()
-    
-    ci = 100 * np.log10(tr.rolling(period).sum() / (high_period - low_period)) / np.log10(period)
-    return ci
-
-def TRIX(data, period=14):
-    """TRIX Indicator"""
-    ema1 = EMA(data, period)
-    ema2 = EMA(pd.DataFrame({'close': ema1}), period)
-    ema3 = EMA(pd.DataFrame({'close': ema2}), period)
-    
-    trix = 100 * (ema3.diff() / ema3.shift(1))
-    return trix
 
 def DonchianChannel(data, period=20):
     """Donchian Channel"""
@@ -283,7 +248,7 @@ def ADX(data, period=14):
     plus_dm[plus_dm < 0] = 0
     minus_dm[minus_dm > 0] = 0
     
-    tr = ATR(data, 1)  # True Range
+    tr = ATR(data, 1)
     
     plus_di = 100 * (plus_dm.ewm(alpha=1/period).mean() / tr.ewm(alpha=1/period).mean())
     minus_di = abs(100 * (minus_dm.ewm(alpha=1/period).mean() / tr.ewm(alpha=1/period).mean()))
@@ -322,10 +287,17 @@ def ROC(data, period=14):
     roc = ((data['close'] - data['close'].shift(period)) / data['close'].shift(period)) * 100
     return roc
 
-def Momentum(data, period=14):
-    """Momentum"""
-    momentum = data['close'] - data['close'].shift(period)
-    return momentum
+def KDJ(data, period=9, k_slow=3, d_slow=3):
+    """KDJ Indicator - Only K and D (J removed - noise)"""
+    low_min = data['low'].rolling(period).min()
+    high_max = data['high'].rolling(period).max()
+    
+    rsv = (data['close'] - low_min) / (high_max - low_min) * 100
+    
+    k = rsv.ewm(span=k_slow, adjust=False).mean()
+    d = k.ewm(span=d_slow, adjust=False).mean()
+    
+    return k, d
 
 def UltimateOscillator(data, period1=7, period2=14, period3=28):
     """Ultimate Oscillator"""
@@ -342,88 +314,3 @@ def UltimateOscillator(data, period1=7, period2=14, period3=28):
     
     uo = 100 * (4 * avg1 + 2 * avg2 + avg3) / 7
     return uo
-
-def KDJ(data, period=9, k_slow=3, d_slow=3):
-    """KDJ Indicator"""
-    low_min = data['low'].rolling(period).min()
-    high_max = data['high'].rolling(period).max()
-    
-    rsv = (data['close'] - low_min) / (high_max - low_min) * 100
-    
-    k = rsv.ewm(span=k_slow, adjust=False).mean()
-    d = k.ewm(span=d_slow, adjust=False).mean()
-    j = 3 * k - 2 * d
-    
-    return k, d, j
-
-def RVI(data, period=14):
-    """Relative Volatility Index"""
-    std = data['close'].rolling(period).std()
-    
-    up_std = std.where(data['close'] > data['close'].shift(1), 0)
-    down_std = std.where(data['close'] < data['close'].shift(1), 0)
-    
-    up_avg = up_std.rolling(period).mean()
-    down_avg = down_std.rolling(period).mean()
-    
-    rvi = 100 * up_avg / (up_avg + down_avg)
-    signal = rvi.rolling(4).mean()
-    
-    return rvi, signal
-
-def ADOSC(data, fast_period=3, slow_period=10):
-    """Accumulation/Distribution Oscillator"""
-    clv = ((data['close'] - data['low']) - (data['high'] - data['close'])) / (data['high'] - data['low'])
-    ad = clv * data['volume']
-    ad = ad.cumsum()
-    
-    adosc = ad.ewm(span=fast_period).mean() - ad.ewm(span=slow_period).mean()
-    return adosc
-
-def FibBollingerBands(data, period=20, std_dev=2):
-    """Fibonacci Bollinger Bands"""
-    sma = SMA(data, period)
-    std = data['close'].rolling(period).std()
-    
-    upper_std = sma + (std_dev * std)
-    lower_std = sma - (std_dev * std)
-    
-    # Fibonacci levels
-    fib_levels = [1.0, 0.618, 0.382, 0, -0.382, -0.618, -1.0]
-    bands = []
-    
-    for level in fib_levels:
-        if level >= 0:
-            band = sma + (level * (upper_std - sma))
-        else:
-            band = sma + (level * (sma - lower_std))
-        bands.append(band)
-    
-    return bands
-
-def TDI(data, rsi_period=13, bb_period=34, signal_period=34):
-    """Traders Dynamic Index"""
-    rsi = RSI(data, rsi_period)
-    
-    # Volatility Bands (similar to Bollinger Bands on RSI)
-    rsi_sma = SMA(pd.DataFrame({'close': rsi}), bb_period)
-    rsi_std = rsi.rolling(bb_period).std()
-    
-    rsi_upper = rsi_sma + (2 * rsi_std)
-    rsi_lower = rsi_sma - (2 * rsi_std)
-    
-    # Trade Signal Line
-    trade_signal = rsi.ewm(span=signal_period).mean()
-    
-    return rsi, rsi_upper, rsi_lower, trade_signal
-
-def VW_MACD(data, fast=12, slow=26, signal=9):
-    """Volume-Weighted MACD"""
-    volume_ema12 = data['close'].ewm(span=fast, adjust=False).mean()
-    volume_ema26 = data['close'].ewm(span=slow, adjust=False).mean()
-    
-    vw_macd = (volume_ema12 - volume_ema26) * (data['volume'] / data['volume'].rolling(50).mean())
-    vw_signal = vw_macd.ewm(span=signal, adjust=False).mean()
-    vw_histogram = vw_macd - vw_signal
-    
-    return vw_macd, vw_signal, vw_histogram
