@@ -129,6 +129,8 @@ stocks = [
     {"symbol": "SYS", "name": "Systems Limited", "tv_symbol": "PSX:SYS"},
     {"symbol": "LUCK", "name": "Lucky Cement", "tv_symbol": "PSX:LUCK"},
     {"symbol": "PSO", "name": "Pakistan State Oil", "tv_symbol": "PSX:PSO"},
+    {"symbol": "KSE100", "name": "KSE-100 Index", "tv_symbol": "PSX:KSE100"},
+
 ]
 
 # Alternative Meezan ETF symbols if the above doesn't work
