@@ -4,33 +4,36 @@ This file contains the comprehensive analysis template for the /test command
 """
 
 ANALYSIS_TEMPLATE = """
-Calculate Values of all time frames, Indicator values on these time frames, funding and Interest rates, market cap, Crypto dominance after this Give me Out Put results and answer of all my questions: 
+🔹 Calculate values across all relevant timeframes 
+🔹 Compute all indicator values on each timeframe — EMA, HMA, RSI, MACD, Stochastic, Williams %R, Volume, OBV,
+   ATR, Bollinger Bands, CCI, ROC, SuperTrend, VWAP, etc.
+🔹 Include key market data — open/close/high/low, volume, price ranges
+🔹 Provide final output results with answers to all key questions
 
 📍 Final Signal Summary
 
 📉 What is the overall trend direction? (Bullish, Bearish, or Sideways, positive, Negative, Neutral)
 
-📊 Provide a detailed breakdown of indicator behaviors — RSI, MACD, EMA, Volume, etc.
+📊 Provide a detailed breakdown of all indicators behavior.
 
 🌡 Present a momentum heatmap — Is momentum rising or fading?
 
-📉 Analyze volume and OBV strength — Do they support the price movement?
+📉 Volume Analysis: Does volume support the price movement? Check OBV & MA comparisons
 
-🧪 Compare current indicators with historically successful setups
+🧪 Historical Comparison: Compare current indicators with historically successful PSX setups
 
-🔄 Is it any breakout? Or Should we wait for confirmation?
+🔄 Breakout or Wait: Is this a breakout, or should we wait for confirmation?
+🔄 Setup Type: Reversal or continuation? What confirms this setup?
 
-🔄 Is this a reversal or continuation setup? What confirms it?
+📉 Price Structure: Are higher highs/lows forming, or is the structure breaking?
 
-📉 Is price forming higher highs/lows or breaking structure?
-
-🌀 Are there any repeating fractal patterns from past cycles?
+🌀 Fractal Patterns: Any repeating patterns from past cycles?
 
 🐾 Over all Is this setup potentially a bull trap or bear trap?
 
 🐾 Are traders overly long/short? Any squeeze setups forming?
 
-🧮 Identify key Fibonacci levels — Is the current price near a retracement or extension zone?
+🧮 Fibonacci Levels: Is price near key retracement or extension zones?
 
 🧭 Is the price nearing any known liquidity pool zones?
 
@@ -49,6 +52,8 @@ Calculate Values of all time frames, Indicator values on these time frames, fund
 🐋 Detect whale movements vs. retail traders — Based on wallet activity or order book flow
 
 ✅ Correction will come or no? and Estimate Correction Ranges.
+
+⏳ Intraday trading setup, best entry and exit points 
 
 ⏳ Scalping High & Low Table
 
