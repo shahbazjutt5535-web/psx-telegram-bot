@@ -45,7 +45,7 @@ ANALYSIS_TEMPLATE = """
 
 🎯 Based on the setup, is TP1, TP2, or TP3 most likely to be hit?
 
-🧭 According to the pakistan time and today day and date which time is best for entry and trade and exit time
+🧭 According to the pakistan time and today day which time is best for entry and trade and exit time
 
 🔁 After taking profit at TP1 or TP2, suggest re-entry levels for the next move
 
@@ -70,6 +70,8 @@ ANALYSIS_TEMPLATE = """
 📅 Offer a 3-day or weekly forecast — What's the expected asset behavior?
 
 📰 Is there any upcoming news or event that could impact the market or this asset?
+
+📰 Any global and in pakistan trending news and other anything that can impact todat trading?
 
 📢 Offer final trading advice — Mindset, Psychology, and Position Sizing
 """
