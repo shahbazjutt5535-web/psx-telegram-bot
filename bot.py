@@ -179,6 +179,18 @@ def calculate_indicators_by_timeframe(df, timeframe):
     elif timeframe in ["4h", "1d", "1w"]:
         df['HMA_21'] = HMA(df, 21)
     
+    # NEW: Stochastic (14,3) - For 5m, 15m, 30m
+    if timeframe in ["5m", "15m", "30m"]:
+        df['STOCH_K'], df['STOCH_D'] = STOCH(df, 14, 3)
+    
+    # NEW: Stochastic RSI (14,3,3) - For 5m, 15m
+    if timeframe in ["5m", "15m"]:
+        df['STOCH_RSI_K'], df['STOCH_RSI_D'] = STOCHRSI(df, 14, 3, 3)
+    
+    # NEW: Williams %R (14) - For 15m, 30m
+    if timeframe in ["15m", "30m"]:
+        df['WILLIAMS_R'] = WILLIAMS_R(df, 14)
+    
     # Momentum indicators
     df['RSI'] = RSI(df, 14)
     df['MACD'], df['MACD_SIGNAL'], df['MACD_HIST'] = MACD(df)
@@ -476,6 +488,26 @@ def create_stock_command(symbol, name, tv_symbol, interval_key):
             
             # 3️⃣ Momentum Strength
             message += f"3️⃣ Momentum Strength\n\n"
+            
+            # NEW: Stochastic (14,3)
+            if 'STOCH_K' in last.index and 'STOCH_D' in last.index:
+                message += (
+                    f"📊 Stochastic (14,3):\n"
+                    f" - %K: {format_value(last['STOCH_K'])}\n"
+                    f" - %D: {format_value(last['STOCH_D'])}\n\n"
+                )
+            
+            # NEW: Stochastic RSI (14,3,3)
+            if 'STOCH_RSI_K' in last.index and 'STOCH_RSI_D' in last.index:
+                message += (
+                    f"📊 Stochastic RSI (14,3,3):\n"
+                    f" - %K: {format_value(last['STOCH_RSI_K'])}\n"
+                    f" - %D: {format_value(last['STOCH_RSI_D'])}\n\n"
+                )
+            
+            # NEW: Williams %R (14)
+            if 'WILLIAMS_R' in last.index:
+                message += f"📊 Williams %R (14):\n - %R: {format_value(last['WILLIAMS_R'])}\n\n"
             
             # MACD
             if 'MACD' in last.index:
