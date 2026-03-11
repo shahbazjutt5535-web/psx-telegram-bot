@@ -45,7 +45,7 @@ ANALYSIS_TEMPLATE = """
 
 🎯 Based on the setup, is TP1, TP2, or TP3 most likely to be hit?
 
-🧭 According to pakistan time which time is best for entry and trade and exit time
+🧭 According to the pakistan time and today day and date which time is best for entry and trade and exit time
 
 🔁 After taking profit at TP1 or TP2, suggest re-entry levels for the next move
 
