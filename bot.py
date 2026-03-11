@@ -126,7 +126,7 @@ stocks = [
     {"symbol": "NBP", "name": "National Bank of Pakistan", "tv_symbol": "PSX:NBP"},
     {"symbol": "UBL", "name": "United Bank Limited", "tv_symbol": "PSX:UBL"},
     {"symbol": "MZNPETF", "name": "Meezan Pakistan ETF", "tv_symbol": "PSX:MZNPETF"},
-    {"symbol": "NBPGETF", "name": "NBP Pakistan Growth ETF", "tv_symbol": "PSX:KSE100"},  # TEMP - using KSE100
+    {"symbol": "NBPGETF", "name": "NBP Pakistan Growth ETF", "tv_symbol": "PSX:NBPGETF"},  # TEMP - using KSE100
     {"symbol": "KEL", "name": "K-Electric", "tv_symbol": "PSX:KEL"},
     {"symbol": "SYS", "name": "Systems Limited", "tv_symbol": "PSX:SYS"},
     {"symbol": "LUCK", "name": "Lucky Cement", "tv_symbol": "PSX:LUCK"},
@@ -142,7 +142,7 @@ gold = {"symbol": "GOLD", "name": "Gold", "tv_symbol": "TVC:GOLD"}
 # Alternative symbols for problematic ETFs
 etf_alternatives = {
     "MZNPETF": ["PSX:MZNPETF", "PSX:MEZNPETF", "PSX:MZNP"],
-    "NBPGETF": ["PSX:NBPGETF", "PSX:NBGETF", "PSX:KSE100"],  # KSE100 as fallback
+    "NBPGETF": ["PSX:NBPGETF", "PSX:NBGETF", "PSX:NBPGETF"],  # KSE100 as fallback
 }
 
 # -------------------------
