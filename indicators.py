@@ -216,6 +216,38 @@ def ROC(data, period=12):
     """Rate of Change"""
     return data['close'].pct_change(periods=period) * 100
 
+def STOCH(data, k_period=14, d_period=3):
+    """Stochastic Oscillator %K and %D"""
+    low_min = data['low'].rolling(window=k_period).min()
+    high_max = data['high'].rolling(window=k_period).max()
+    
+    stoch_k = 100 * ((data['close'] - low_min) / (high_max - low_min))
+    stoch_d = stoch_k.rolling(window=d_period).mean()
+    
+    return stoch_k, stoch_d
+
+def STOCHRSI(data, rsi_period=14, stoch_k=3, stoch_d=3):
+    """Stochastic RSI"""
+    # First calculate RSI
+    rsi = RSI(data, rsi_period)
+    
+    # Then calculate Stochastic of RSI
+    rsi_min = rsi.rolling(window=stoch_k).min()
+    rsi_max = rsi.rolling(window=stoch_k).max()
+    
+    stoch_rsi_k = 100 * ((rsi - rsi_min) / (rsi_max - rsi_min))
+    stoch_rsi_d = stoch_rsi_k.rolling(window=stoch_d).mean()
+    
+    return stoch_rsi_k, stoch_rsi_d
+
+def WILLIAMS_R(data, period=14):
+    """Williams %R Indicator"""
+    high_max = data['high'].rolling(window=period).max()
+    low_min = data['low'].rolling(window=period).min()
+    
+    williams_r = -100 * ((high_max - data['close']) / (high_max - low_min))
+    return williams_r
+
 def CCI(data, period=20):
     """Commodity Channel Index"""
     tp = (data['high'] + data['low'] + data['close']) / 3
