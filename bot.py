@@ -131,6 +131,7 @@ stocks = [
     {"symbol": "SYS", "name": "Systems Limited", "tv_symbol": "PSX:SYS"},
     {"symbol": "LUCK", "name": "Lucky Cement", "tv_symbol": "PSX:LUCK"},
     {"symbol": "PSO", "name": "Pakistan State Oil", "tv_symbol": "PSX:PSO"},
+    {"symbol": "BOP", "name": "Bank Of Punjab", "tv_symbol": "PSX:BOP"},
 ]
 
 # KSE-100 Index - CORRECT SYMBOL
