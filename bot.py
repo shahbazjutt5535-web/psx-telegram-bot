@@ -138,7 +138,6 @@ stocks = [
     { "symbol": "LINK", "name": "Chainlink", "tv_symbol": "BINANCE:LINKUSDT" },
     { "symbol": "TRX", "name": "TRON", "tv_symbol": "BINANCE:TRXUSDT" },
 ]
-]
 
 # KSE-100 Index - CORRECT SYMBOL
 kse100 = {"symbol": "KSE100", "name": "KSE-100 Index", "tv_symbol": "PSX:KSE100"}
