@@ -137,6 +137,7 @@ stocks = [
     { "symbol": "DXY", "name": "US Dollar Index", "tv_symbol": "TVC:DXY" },
     { "symbol": "LINK", "name": "Chainlink", "tv_symbol": "BINANCE:LINKUSDT" },
     { "symbol": "TRX", "name": "TRON", "tv_symbol": "BINANCE:TRXUSDT" },
+    { "symbol": "ETH", "name": "Ethereum", "tv_symbol": "BINANCE:ETHUSDT" },
 ]
 
 # KSE-100 Index - CORRECT SYMBOL
