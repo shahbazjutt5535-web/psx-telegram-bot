@@ -139,7 +139,7 @@ stocks = [
     { "symbol": "TRX", "name": "TRON", "tv_symbol": "BINANCE:TRXUSDT" },
     { "symbol": "ETH", "name": "Ethereum", "tv_symbol": "BINANCE:ETHUSDT" },
     { "symbol": "NGAS", "name": "Natural Gas (Capital.com)", "tv_symbol": "CAPITALCOM:NATURALGAS" },
-    { "symbol": "UREA", "name": "Urea Granular US Gulf Futures", "tv_symbol": "CBOT:UFV1" },
+    { "symbol": "UREA", "name": "Urea Granular US Gulf Futures", "tv_symbol": "CBOT:UFV1!" },
 # KSE-100 Index - CORRECT SYMBOL
 kse100 = {"symbol": "KSE100", "name": "KSE-100 Index", "tv_symbol": "PSX:KSE100"}
 
